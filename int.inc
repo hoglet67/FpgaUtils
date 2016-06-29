@@ -3,7 +3,7 @@
 ; #Axxx command interpreter
 ;=================================================================
 
-.DEFINE NAME_VERSION    "FPGA UTILS V0.26"
+.DEFINE NAME_VERSION    "FPGA UTILS V0.27"
 
 ;=================================================================
 ; Constant DECLARATION
