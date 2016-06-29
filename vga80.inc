@@ -982,17 +982,16 @@ vdu28l1:        lda     queue,x
 
 exevdu22:       ldy     #0              ; reset y register
                 lda     queue+1         ; load mode
+                sec
+                sbc     #16             ; map modes 16.. to Atom Mode 0..4
                 sta     $52             ; save graphics mode
                 beq     LF6C2           ; clear 0
-                cmp		#8				; mode 8 tweak (dumped by Z80 Tube client)
-                bne		notmode8
-                lda		#7				; if mode = 8 then mode = 7
-notmode8:       cmp     #7              ; mode 7 (VGA80)
-                bne     LF684
-mode7:          jmp     LFD69           ; clear the screen and end
+                bpl     LF684
+                jmp     LFD69           ; clear the screen and end
 LF684:          cmp     #5              ; test for mode > 4
                 bcc     LF68A
                 lda     #4              ; force mode 4
+                sta     $52             ; save graphics mode
 LF68A:          ldx     #$80            ; reset x register
                 stx     $54             ; set pointer to start of video memory
                 sty     $53
