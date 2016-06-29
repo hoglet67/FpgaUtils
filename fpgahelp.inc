@@ -44,12 +44,4 @@ help5:
 		LDA com_tab,X
 		BPL help1
 
-		JSR prttxt
-		
-		.byte "EXAMPLES:",10,13
-		.byte " BAUD 115200",10,13
-		.byte " DNLOAD #4000",10,13
-		.byte " FLASH #4000,4",10,13
-		NOP
-
 		RTS
