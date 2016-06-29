@@ -175,13 +175,13 @@ com_tab:
 .IF Atom15k = 0
 	.byte "RLIST"
 	.byte >roms,<roms
+.ENDIF
 
 	.byte "FLASH"
 	.byte >flash,<flash
 
 	.byte "BEEB"
 	.byte >beeb,<beeb
-.ENDIF
 
 	.byte "VGA80"
 	.byte >vga80,<vga80

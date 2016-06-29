@@ -41,14 +41,14 @@ start_asm:
 	.include "serial.inc"
 	.include "fpgahelp.inc"
 	.include "constants.inc"
-    .include "man.inc"
+   .include "man.inc"
+	.include "flash.inc"
+	.include "beeb.inc"
 	
 .IF Atom15k
 	.include "vga80.inc"
 .ELSE
 	.include "roms.inc"
-	.include "flash.inc"
-	.include "beeb.inc"
 	.include "vga80tiny.inc"
 .ENDIF
 
