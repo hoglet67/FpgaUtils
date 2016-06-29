@@ -1,7 +1,9 @@
 *~
 #*
-fpgautils.rom
-fpgautils.lst
-fpgautils.o
-patch.*
+*.lst
+FPGAUTIL.BIN
+FPGAUTIL
+OSWRCH80.BIN
+OSWRCH80
+*.o
 

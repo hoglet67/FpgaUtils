@@ -4,15 +4,18 @@
 ; of a #Axxx ROM
 ;----------------------------------------------
 	.DEFINE asm_code $A000
-	.DEFINE header   0		; Header Atomulator
 	.DEFINE Atom15k  1      ; Assemble for Atom15k or for AtomFpga
-	.DEFINE filenaam "FPGAUTIL.ROM"
+	.DEFINE filenaam "FPGAUTIL"
 
-.org asm_code-22*header
-
+.IFNDEF header        
+	.DEFINE header   0           ; Header Atomulator
+.ENDIF
+        
 .IF header
 ;********************************************************************
 ; ATM Header for Atomulator
+   .SEGMENT "HEADER"
+   .org asm_code-22*header
 
 name_start:
 	.byte filenaam			; Filename
@@ -28,6 +31,8 @@ name_end:
 ;********************************************************************
 .ENDIF
 
+   .SEGMENT "CODE"
+   .org asm_code
 
 exec:
 start_asm:
@@ -46,7 +51,10 @@ start_asm:
 	.include "beeb.inc"
 	.include "vga80tiny.inc"
 .ENDIF
-	
+
+   .SEGMENT "DATA"
+   .org asm_code + $FFE
+
 	.byte <sinout, >sinout	
 	
 eind_asm:
