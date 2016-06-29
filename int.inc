@@ -189,7 +189,6 @@ com_tab:
 	.byte "VGA32"
 	.byte >vga32,<vga32
 
-
 	.byte "MAN"
 	.byte >man,<man
 
@@ -201,7 +200,7 @@ com_tab:
 
 help_tab:
 	; FHELP
-    	.byte 0
+   .byte 0
 
 	; Baud
 	.byte "<BAUD RATE>",0
@@ -221,11 +220,13 @@ help_tab:
 	; Download
 	.byte "<START>",0
 
-    	; Crc
+   ; Crc
 	.byte "<START>,<END>",0
 
+.IF Atom15k = 0
 	; Roms
 	.byte 0
+.ENDIF
 
 	; Flash
 	.byte "<START>,<BANK>",0
@@ -235,6 +236,12 @@ help_tab:
 
 	; Vga80
 	.byte 0
+
+	; Vga32
+	.byte 0
+
+	; Man
+   .byte "<PAGE>",0
 
 ;=================================================================
 ; Command parser helper routines
