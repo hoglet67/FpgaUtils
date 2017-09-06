@@ -566,8 +566,8 @@ LFE51:  rts                     ;
 ;  - Preserves all registers.
 
 wrch80: 
-        ; jsr     LFEFB           ; Send character in accumulator to the VIA, disabled, see http://stardot.org.uk/forums/viewtopic.php?p=135913#p135912
-        
+        jsr     LFEFB           ; Send character in accumulator to the VIA, disabled, see http://stardot.org.uk/forums/viewtopic.php?p=135913#p135912
+                                ; Now enabled again, see http://stardot.org.uk/forums/viewtopic.php?f=44&t=11220&p=151818#p151815
 
 ;    Send Character to Screen subroutine
 ;    -----------------------------------
