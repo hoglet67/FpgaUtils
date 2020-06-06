@@ -2,17 +2,7 @@
 ; Constants used by oswrch80
 ;=================================================================
 
-; GODIL related addresses
-GODIL         = $BDE0
-
 DefaultAttrib = $17
-
-ModeExtension = GODIL + 0
-CursorCol     = GODIL + 2
-CursorRow     = GODIL + 3
-VgaCtrl       = GODIL + 4
-GodilVersion  = GODIL + 15
-
 
 ; Workspace
 vduque   = $4e0

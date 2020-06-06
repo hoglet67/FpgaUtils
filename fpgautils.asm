@@ -8,6 +8,7 @@
         HASATTRIBUTES = 1
         HASASCII      = 0
 
+        .include "godil.inc"
 
 ;----------------------------------------------
 ;DEMOROM

@@ -8,6 +8,7 @@
         HASATTRIBUTES = 0
         HASASCII      = 1
 
+        .include "gop.inc"
         .include "constants.inc"
 
 .if header

@@ -11,8 +11,10 @@ vga80:
         LDA     #0
         STA     ctrlcode
         STA     quelen
+.IF HASGODIL
         LDA     #$80
         STA     ModeExtension
+.ENDIF
         LDA     #$BA
         STA     VgaCtrl
 .IF HASATTRIBUTES
@@ -267,8 +269,10 @@ LFD69:  ldy     #$80            ;
         sty     $E1             ; Set the cursor mask to default
         ldy     #$00            ; Clear screen memory index
         sty     $B000           ; Set 6847 VDG to alphanumeric mode
+.IF HASGODIL
         lda     #$80            ; set Godil to VGA80
         sta     ModeExtension
+.ENDIF
         lda     #$20            ; Get <SPC>
 LFD74:  jsr     CLEARMORE
         iny                     ; Point to the next byte
@@ -337,12 +341,13 @@ address_loop:
         inc     CursorRow
         lda     $de
         sec
-        sbc     #80
+        sbc     #NUMCOLS
         sta     $de
         lda     $df
         sbc     #0
         sta     $df
-        bmi     address_loop
+        cmp     #>SCREEN
+        bcs     address_loop
         pla                     ; restore de/df
         sta     $df
         pla
@@ -390,7 +395,7 @@ cursor_u:
         ldy     CursorRow
         dey
         bpl     cursor_u_nowrap
-        ldy     #39
+        ldy     #NUMROWS-1
 cursor_u_nowrap:
         sty     CursorRow
         rts
@@ -398,7 +403,7 @@ cursor_u_nowrap:
 cursor_r:
         ldy     CursorCol
         iny
-        cpy     #80
+        cpy     #NUMCOLS
         bcs     cursor_r_wrap
         sty     CursorCol
         rts
@@ -409,7 +414,7 @@ cursor_r_wrap:
 cursor_d:
         ldy     CursorRow
         iny
-        cpy     #40
+        cpy     #NUMROWS
         bcc     cursor_d_nowrap
         ldy     #0
 cursor_d_nowrap:
@@ -431,7 +436,7 @@ copy_loop:
         bmi     copy_grab
         clc
         lda     $de
-        adc     #80
+        adc     #NUMCOLS
         sta     $de
         bcc     copy_loop
         inc     $df
@@ -439,6 +444,7 @@ copy_loop:
 copy_grab:
         iny
         lda     ($de), Y
+.IF !HASASCII
         ;                 ADC#$20
         ; Screen 00-1F -> 20-3F -> ASCII 40-5F
         ; Screen 20-3F -> 40-5F -> ASCII 20-3F
@@ -449,6 +455,7 @@ copy_grab:
         bcs     copy_done
         eor     #$60
 copy_done:
+.ENDIF
         tax                    ; remember the ascii value
         jsr     cursor_r       ; copy also moves the cursor right
         pla
@@ -1064,8 +1071,10 @@ LF6AB:          ldy     $52             ; load video mode
                 sta     $03FE
                 lda     $F6DD,y         ; set video controller
                 sta     $B000
+.IF HASGODIL
                 lda     #$00            ; set Godil
                 sta     ModeExtension
+.ENDIF
                 rts
 LF6C2:          lda     #$40            ; clear video memory for mode 0
 LF6C4:          sta     $8000,y
@@ -1238,7 +1247,9 @@ vga32l1:        LDA     $FF9E,Y
                 STA     WRCVEC,Y
                 DEY
                 BPL     vga32l1
+.IF HASGODIL
                 LDA     #$00
                 STA     ModeExtension
+.ENDIF
                 STA     VgaCtrl
                 JMP     vga80l1
