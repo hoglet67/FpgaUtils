@@ -1,4 +1,15 @@
 ;----------------------------------------------
+; Configuration for vga80
+;----------------------------------------------
+
+        SCREEN        = $8000
+        NUMCOLS       = 80
+        NUMROWS       = 40
+        HASATTRIBUTES = 1
+        HASASCII      = 0
+
+
+;----------------------------------------------
 ;DEMOROM
 ; Code to demonstrate the structure
 ; of a #Axxx ROM
@@ -7,10 +18,10 @@
 	.DEFINE Atom15k  1      ; Assemble for Atom15k or for AtomFpga
 	.DEFINE filenaam "FPGAUTIL"
 
-.IFNDEF header        
+.IFNDEF header
 	.DEFINE header   0           ; Header Atomulator
 .ENDIF
-        
+
 .IF header
 ;********************************************************************
 ; ATM Header for Atomulator
@@ -44,7 +55,7 @@ start_asm:
    .include "man.inc"
 	.include "flash.inc"
 	.include "beeb.inc"
-	
+
 .IF Atom15k
 	.include "vga80.inc"
 .ELSE
@@ -55,6 +66,6 @@ start_asm:
    .SEGMENT "DATA"
    .org asm_code + $FFE
 
-	.byte <sinout, >sinout	
-	
+	.byte <sinout, >sinout
+
 eind_asm:

@@ -2,11 +2,11 @@
         header  = 1
 .endif
 
-        SCREEN        = $8000
+        SCREEN        = $A000
         NUMCOLS       = 80
-        NUMROWS       = 40
-        HASATTRIBUTES = 1
-        HASASCII      = 0
+        NUMROWS       = 25
+        HASATTRIBUTES = 0
+        HASASCII      = 1
 
         .include "constants.inc"
 

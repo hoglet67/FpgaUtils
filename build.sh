@@ -1,31 +1,21 @@
 #!/bin/bash
 
-ROM=fpgautils
-ROMBIN=FPGAUTIL.BIN
-ROMATM=FPGAUTIL
+for TOP in fpgautils oswrch80 oswrcha0
+do
 
-STANDALONE=oswrch80
-STANDALONEBIN=OSWRCH80.BIN
-STANDALONEATM=OSWRCH80
+    STEM=`echo $TOP | tr "a-z" "A-Z" | cut -c1-8`
+    BIN=${STEM}.BIN
+    ATM=${STEM}
 
-# Build Fpgautils ROM
-echo building ${ROMATM}
-ca65 -Dheader=1 -l${ROM}.lst  -o ${ROM}.o ${ROM}.asm 
-ld65 ${ROM}.o -o ${ROMATM} -C ${ROM}.cfg 
+    echo building ${ATM}
+    ca65 -Dheader=1 -l${TOP}.lst  -o ${TOP}.o ${TOP}.asm
+    ld65 ${TOP}.o -o ${ATM} -C ${TOP}.cfg
 
-echo building ${ROMBIN}
-ca65 -Dheader=0 -l${ROM}.lst  -o ${ROM}.o ${ROM}.asm 
-ld65 ${ROM}.o -o ${ROMBIN} -C ${ROM}.cfg 
+    echo building ${BIN}
+    ca65 -Dheader=0 -l${TOP}.lst  -o ${TOP}.o ${TOP}.asm
+    ld65 ${TOP}.o -o ${BIN} -C ${TOP}.cfg
 
-# Build standalone OSWRCH80
-echo building ${STANDALONEATM}
-ca65 -Dheader=1 -l${STANDALONE}.lst -o ${STANDALONE}.o ${STANDALONE}.asm
-ld65 ${STANDALONE}.o -o ${STANDALONEATM} -C ${STANDALONE}.cfg 
-
-echo building ${STANDALONEBIN}
-ca65 -Dheader=0 -l${STANDALONE}.lst -o ${STANDALONE}.o ${STANDALONE}.asm
-ld65 ${STANDALONE}.o -o ${STANDALONEBIN} -C ${STANDALONE}.cfg 
+done
 
 # Cleanup
 rm -f *.o
-

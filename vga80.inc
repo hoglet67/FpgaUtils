@@ -15,8 +15,10 @@ vga80:
         STA     ModeExtension
         LDA     #$BA
         STA     VgaCtrl
+.IF HASATTRIBUTES
         LDA     #DefaultAttrib
         STA     attrib
+.ENDIF
         JSR     exevdu26
 vga80l1:
         LDA     #12
@@ -37,7 +39,7 @@ vga80l1:
 LFCEA:          ldx     quelen          ; check if queue should be filled
                 beq     notque          ; no, continue with printing
                 sta     queue,x         ; store in queue (stores in backward direction, so last param is first in queue!)
-                dec     quelen          ; decrement queue counter       
+                dec     quelen          ; decrement queue counter
                 beq     exequete        ; queue is full, execute the command
                 rts                     ; otherwise end routine
 
@@ -50,20 +52,20 @@ exe1:           cmp     #17             ; is it 17,c (colour c)
                 jmp     exevdu17
 exe2:           cmp     #28             ; is it 28,x,y,h,w (define text window)
                 bne     exe3            ; no, next test
-                jmp     exevdu28        
+                jmp     exevdu28
 exe3:           cmp     #22             ; is it 22,m (set graphics mode)
                 bne     exe4            ; no, next test
-                jmp     exevdu22        
+                jmp     exevdu22
 exe4:           cmp     #25             ; is it 25,m,x,y (plot command)
                 bne     exe5            ; no, next test
-                jmp     exevdu25        
+                jmp     exevdu25
 exe5:           cmp     #18             ; is it 18,m,c (set graphics colour)
                 bne     exe6
                 jmp     exevdu18
 exe6:           lda     #0              ; no code? strange
                 sta     ctrlcode        ; clear queue
                 rts                     ; end routine
-                
+
 notque:         cmp     #22             ; is it vdu 22
                 beq     q17             ; why not? It's also 1 byte queue length :-)
                 cmp     #25             ; is it vdu 25
@@ -167,13 +169,16 @@ LFD29:  cmp     #$20            ; Is the character a control code ?
 ;        bmi     LFD33          ; )
 ;        eor     #$60           ; ) Convert to screen character
 
+.IF !HASASCII
          cmp     #$40
          bcc     LFD33
          sbc     #$20
          and     #$5f
+.ENDIF
 
 LFD33:  sta     ($DE),y         ; Store character at current print position
 
+.IF HASATTRIBUTES
         ; set character attribute
         pha
         clc
@@ -187,12 +192,12 @@ LFD33:  sta     ($DE),y         ; Store character at current print position
         sta     $df
         lda     attrib
         sta     ($de),y
-        pla     
+        pla
         sta     $df
-        pla     
+        pla
         sta     $de
         pla
-
+.ENDIF
 
 LFD38:  iny                     ; Increment cursor position
         cpy     #NUMCOLS        ; Reached end of the current print line ?
@@ -274,7 +279,16 @@ LFD74:  jsr     CLEARMORE
 ;
 ;  - Sets cursor to top left position.
 
-LFD7D:  jmp     $fd7d
+LFD7D:
+.IF SCREEN = $8000
+        jmp $fd7d
+.ELSE
+        lda #>SCREEN
+        ldy #<SCREEN
+        sta $df
+        sty $de
+        jmp     LFD42           ; Update cursor position and invert cursor
+.ENDIF
 
 ;    Handle <VT> subroutine
 ;    ----------------------
@@ -409,7 +423,7 @@ copy:
         pha
         lda     CursorCol
         sta     $de
-        lda     #$80
+        lda     #>SCREEN
         sta     $df
         ldy     CursorRow
 copy_loop:
@@ -483,8 +497,10 @@ LFE08:  ldy     #NUMCOLS        ; Shift screen up 32 characters = 1 line
 
 LFE0D:  lda     SCREEN,y        ; Get byte from upper text page
         sta     SCREEN-NUMCOLS,y                ; ..and store it a line higher
+.IF HASATTRIBUTES
         lda     SCREEN+$C80,y                   ; scroll attribute
         sta     SCREEN+$C80-NUMCOLS,y
+.ENDIF
         iny                     ; Point to next screen byte
         bne     LFE0D           ; ..and shift up all the upper text page
         JSR     SCROLLMORE
@@ -499,12 +515,14 @@ LFE0D:  lda     SCREEN,y        ; Get byte from upper text page
 LFE26:  sta     ($DE),y         ; Clear the character to black
         dey                     ; Point to the next character
         bpl     LFE26           ; ..and clear the entire print line
-        
+
+.IF HASATTRIBUTES
         ldy     #NUMCOLS-1      ; Set character pointer to end of line
         lda     attrib          ; Get attribute
 LFE26a: sta     $98B0,y         ; Set the current attribute
         dey                     ; Point to the next character
-        bpl     LFE26a          ; ..and clear the entire print line        
+        bpl     LFE26a          ; ..and clear the entire print line
+.ENDIF
         rts                     ;
 
 ;    Add One Line to the Cursor Position subroutine
@@ -565,7 +583,7 @@ LFE51:  rts                     ;
 ;
 ;  - Preserves all registers.
 
-wrch80: 
+wrch80:
         jsr     LFEFB           ; Send character in accumulator to the VIA, disabled, see http://stardot.org.uk/forums/viewtopic.php?p=135913#p135912
                                 ; Now enabled again, see http://stardot.org.uk/forums/viewtopic.php?f=44&t=11220&p=151818#p151815
 
@@ -752,7 +770,8 @@ CLEARMORE:
         sta     SCREEN+$c00,y
 
 CLEARATTR:
-        lda     attrib          ; set attribute 
+.IF HASATTRIBUTES
+        lda     attrib          ; set attribute
         sta     SCREEN+$000+$C80,y
         sta     SCREEN+$100+$C80,y
         sta     SCREEN+$200+$C80,y
@@ -769,6 +788,7 @@ CLEARATTR:
         bpl     CLEAREND
         sta     SCREEN+$c00+$C80,y
 CLEAREND:
+.ENDIF
         lda     #$20
         rts
 
@@ -778,85 +798,109 @@ SCROLLMORE:
 LFDF29:
         LDA     SCREEN+$100,Y
         STA     SCREEN+$100-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$100+$C80,Y
         STA     SCREEN+$100+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF29
 LFDF2A:
         LDA     SCREEN+$200,Y
         STA     SCREEN+$200-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$200+$C80,Y
         STA     SCREEN+$200+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2A
 LFDF2B:
         LDA     SCREEN+$300,Y
         STA     SCREEN+$300-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$300+$C80,Y
         STA     SCREEN+$300+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2B
 LFDF2C:
         LDA     SCREEN+$400,Y
         STA     SCREEN+$400-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$400+$C80,Y
         STA     SCREEN+$400+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2C
 LFDF2D:
         LDA     SCREEN+$500,Y
         STA     SCREEN+$500-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$500+$C80,Y
         STA     SCREEN+$500+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2D
 LFDF2E:
         LDA     SCREEN+$600,Y
         STA     SCREEN+$600-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$600+$C80,Y
         STA     SCREEN+$600+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2E
 LFDF2F:
         LDA     SCREEN+$700,Y
         STA     SCREEN+$700-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$700+$C80,Y
         STA     SCREEN+$700+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2F
 LFDF2G:
         LDA     SCREEN+$800,Y
         STA     SCREEN+$800-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$800+$C80,Y
         STA     SCREEN+$800+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2G
 LFDF2H:
         LDA     SCREEN+$900,Y
         STA     SCREEN+$900-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$900+$C80,Y
         STA     SCREEN+$900+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2H
 LFDF2I:
         LDA     SCREEN+$a00,Y
         STA     SCREEN+$a00-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$a00+$C80,Y
         STA     SCREEN+$a00+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2I
 LFDF2J:
         LDA     SCREEN+$b00,Y
         STA     SCREEN+$b00-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$b00+$C80,Y
         STA     SCREEN+$b00+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BNE     LFDF2J
 LFDF2K:
         LDA     SCREEN+$c00,Y
         STA     SCREEN+$c00-NUMCOLS,Y
+.IF HASATTRIBUTES
         LDA     SCREEN+$c00+$C80,Y
         STA     SCREEN+$c00+$C80-NUMCOLS,Y
+.ENDIF
         INY
         BPL     LFDF2K
 
@@ -868,10 +912,10 @@ LFDF2K:
 exevdu31:       ldy     #0              ; cursor off at old position
                 lda     ($de),y
                 and     #$7f
-                sta     ($de),y         
-                lda     #$80            ; cursor position to y
+                sta     ($de),y
+                lda     #>SCREEN        ; cursor position to y
                 sta     $df
-                lda     #$00
+                lda     #<SCREEN
                 sta     $de
                 ldy     queue+1
                 beq     vdu31l2         ; jump if y=0 (upper row)
@@ -890,8 +934,10 @@ vdu31l2:        lda     queue+2         ; cursor position to x
                 rts
 
 exevdu17:       ; set foreground colour, actual setting of attribute should be handled by print routine
+.IF HASATTRIBUTES
                 lda     queue+1         ; load the colour
                 sta     attrib          ; store in memory
+.ENDIF
                 rts                     ; end
 
 
@@ -904,9 +950,9 @@ exevdu16:       ; clear text window
                 pha
                 lda     $e1
                 pha
-                lda     #$00            ; calculate start address of topY
+                lda     #<SCREEN        ; calculate start address of topY
                 sta     queue
-                lda     #$80
+                lda     #>SCREEN
                 sta     queue+1
                 ldy     topY            ; load counter
 vdu16l1:        clc
@@ -918,24 +964,30 @@ vdu16l1:        clc
                 sta     queue+1
                 dey
                 bne     vdu16l1
-                ; now queue, queue+1 contains first address of line     
+                ; now queue, queue+1 contains first address of line
                 ; just fill this area with spaces from left to right
                 ; for the correct number of lines
                 ldx     topY
 vdu16l2:        lda     queue
                 sta     $9e
+.IF HASATTRIBUTES
                 clc
                 adc     #<3200
                 sta     $a0
+.ENDIF
                 lda     queue+1
                 sta     $9f
+.IF HASATTRIBUTES
                 adc     #>3200
                 sta     $a1
+.ENDIF
                 ldy     leftX
 vdu16l3:        lda     #32             ; clear character
                 sta     ($9e),y
+.IF HASATTRIBUTES
                 lda     attrib          ; set background attrib
-                sta     ($a0),y         
+                sta     ($a0),y
+.ENDIF
                 iny
                 cpy     rightX
                 bcc     vdu16l3         ; branch if smaller
@@ -992,7 +1044,7 @@ LF684:          cmp     #5              ; test for mode > 4
                 bcc     LF68A
                 lda     #4              ; force mode 4
                 sta     $52             ; save graphics mode
-LF68A:          ldx     #$80            ; reset x register
+LF68A:          ldx     #>SCREEN        ; reset x register
                 stx     $54             ; set pointer to start of video memory
                 sty     $53
                 tax                     ; load pointer to end of video memory
@@ -1060,7 +1112,7 @@ LDF25:          lda     $B000           ; reload video mode setting
                 sta     $3FF            ; store in workspace
                 rts                     ; that's it, end of routine
 
-exevdu25:       
+exevdu25:
                 lda     queue+1         ; copy coordinates
                 sta     $5D             ; set in zeropage/workspace
                 lda     queue+2         ; copy coordinates
@@ -1071,7 +1123,7 @@ exevdu25:
                 sta     $5A             ; set in zeropage/workspace
                 lda     queue+5         ; set plot mode
                 sta     $5E
-                
+
                 ldx     #3              ; load pointer
 LF576:          lda     $03C1,x         ; load previous coordinate
                 sta     $52,x           ; copy to zeropage/workspace
@@ -1105,7 +1157,7 @@ LF599:          lda     $5A,x           ; save new coordinates
                 beq     LF5B5           ; jmp if draw mode
                 jsr     $F678           ; plot the pixel
 LF5B2:          rts                     ; end of routine
-        
+
 
 LF5B5:          ldx     #2              ; load x reg as index
 LF5B7:          sec                     ; set carry for subtraction
@@ -1114,7 +1166,7 @@ LF5B7:          sec                     ; set carry for subtraction
                 ldy     $52,x           ; load low byte of previous coordinate
                 sty     $5A,x           ; set as first plot coordinate
                 sta     $52,x           ; set length of plot coordinate
-                ldy     $53,x           
+                ldy     $53,x
                 lda     $5B,x           ; same procedure for high byte
                 sbc     $53,x
                 sty     $5B,x
@@ -1134,7 +1186,7 @@ LF5DD:          dex                     ; decrement index
 
 LF5E1:          lda     $54             ; load low byte y coordinate
                 cmp     $52             ; compare with low byte x
-                lda     $55             ; load high byte y 
+                lda     $55             ; load high byte y
                 sbc     $53             ; subtract from high byte x
                 bcc     LF61C           ; jump if x is larger
 

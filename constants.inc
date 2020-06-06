@@ -29,10 +29,6 @@ leftX    = vduque+19
 WRCVEC = $0208
 RDCVEC = $020A
 
-NUMROWS = 40
-NUMCOLS = 80
-
-SCREEN = $8000
 SCREENEND = SCREEN + (NUMROWS - 1) * NUMCOLS
 
 ; Send character in accumulator to the VIA
@@ -40,8 +36,8 @@ LFEFB = $FEFB
 
 ; Wait 0.1 second for debounce
 LFB8A = $fB8A
-	
-; Scan keyboard	
+
+; Scan keyboard
 LFE71 = $FE71
 
 ; Keyboard Control Code Handlers
@@ -61,4 +57,3 @@ LFDE2 = $FDE2
 ; Flyback
 LFE66 = $FE66
 LFE6B = $FE6B
-
