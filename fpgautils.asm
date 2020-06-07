@@ -53,7 +53,7 @@ start_asm:
 	.include "serial.inc"
 	.include "fpgahelp.inc"
 	.include "constants.inc"
-   .include "man.inc"
+	.include "man.inc"
 	.include "flash.inc"
 	.include "beeb.inc"
 
