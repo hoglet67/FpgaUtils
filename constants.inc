@@ -20,6 +20,7 @@ WRCVEC = $0208
 RDCVEC = $020A
 
 SCREENEND = SCREEN + (NUMROWS - 1) * NUMCOLS
+ATTRS     = SCREEN + NUMROWS * NUMCOLS
 
 ; Send character in accumulator to the VIA
 LFEFB = $FEFB

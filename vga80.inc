@@ -275,8 +275,6 @@ LFD69:  ldy     #$80            ;
 .ENDIF
         lda     #$20            ; Get <SPC>
 LFD74:  jsr     CLEARMORE
-        iny                     ; Point to the next byte
-        bne     LFD74           ; ..and clear both complete pages
 
 ;    Handle <RS> subroutine
 ;    ----------------------
@@ -502,15 +500,7 @@ LFE08:  ldy     #NUMCOLS        ; Shift screen up 32 characters = 1 line
 ;
 ;  - For every #20 in Y a top line of the screen is not scrolled.
 
-LFE0D:  lda     SCREEN,y        ; Get byte from upper text page
-        sta     SCREEN-NUMCOLS,y                ; ..and store it a line higher
-.IF HASATTRIBUTES
-        lda     SCREEN+$C80,y                   ; scroll attribute
-        sta     SCREEN+$C80-NUMCOLS,y
-.ENDIF
-        iny                     ; Point to next screen byte
-        bne     LFE0D           ; ..and shift up all the upper text page
-        JSR     SCROLLMORE
+LFE0D:  jsr     SCROLLMORE
 
 ;    Delete Current Line subroutine
 ;    ------------------------------
@@ -760,158 +750,84 @@ tablehi:
 
 
 CLEARMORE:
-        sta     SCREEN+$000,y
-        sta     SCREEN+$100,y
-        sta     SCREEN+$200,y
-        sta     SCREEN+$300,y
-        sta     SCREEN+$400,y
-        sta     SCREEN+$500,y
-        sta     SCREEN+$600,y
-        sta     SCREEN+$700,y
-        sta     SCREEN+$800,y
-        sta     SCREEN+$900,y
-        sta     SCREEN+$a00,y
-        sta     SCREEN+$b00,y
-        cpy     #$80
-        bpl     CLEARATTR
-        sta     SCREEN+$c00,y
 
-CLEARATTR:
+cl1:
+.REPEAT >(NUMCOLS*NUMROWS), I
+        sta     SCREEN+(I*256),y
+.ENDREP
+        iny
+        bne     cl1
+.IF <(NUMCOLS*NUMROWS) > 0
+cl2:
+        sta     SCREEN+256*>(NUMCOLS*NUMROWS),y
+        iny
+        cpy     #<(NUMCOLS*NUMROWS)
+        bne     cl2
+.ENDIF
+
 .IF HASATTRIBUTES
         lda     attrib          ; set attribute
-        sta     SCREEN+$000+$C80,y
-        sta     SCREEN+$100+$C80,y
-        sta     SCREEN+$200+$C80,y
-        sta     SCREEN+$300+$C80,y
-        sta     SCREEN+$400+$C80,y
-        sta     SCREEN+$500+$C80,y
-        sta     SCREEN+$600+$C80,y
-        sta     SCREEN+$700+$C80,y
-        sta     SCREEN+$800+$C80,y
-        sta     SCREEN+$900+$C80,y
-        sta     SCREEN+$a00+$C80,y
-        sta     SCREEN+$b00+$C80,y
-        cpy     #$80
-        bpl     CLEAREND
-        sta     SCREEN+$c00+$C80,y
-CLEAREND:
+cl3:
+.REPEAT >(NUMCOLS*NUMROWS), I
+        sta     ATTRS+(256*I),y
+.ENDREP
+        iny
+        bne     cl3
+.IF <(NUMCOLS*NUMROWS) > 0
+cl4:
+        sta     ATTRS+(256*>(NUMCOLS*NUMROWS)),y
+        iny
+        cpy     #<(NUMCOLS*NUMROWS)
+        bne     cl4
+.ENDIF
 .ENDIF
         lda     #$20
         rts
 
-
 SCROLLMORE:
 
-LFDF29:
-        LDA     SCREEN+$100,Y
-        STA     SCREEN+$100-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$100+$C80,Y
-        STA     SCREEN+$100+$C80-NUMCOLS,Y
+.REPEAT >(NUMCOLS*NUMROWS), I
+.SCOPE
+@sl1:
+        lda     SCREEN+(256*I),y
+        sta     SCREEN+(256*I)-NUMCOLS,y
+        iny
+        bne     @sl1
+.ENDSCOPE
+.ENDREP
+.IF <(NUMCOLS*NUMROWS) > 0
+@sl2:
+        lda     SCREEN+(256*>(NUMCOLS*NUMROWS)),y
+        sta     SCREEN+(256*>(NUMCOLS*NUMROWS))-NUMCOLS,y
+        iny
+        cpy     #<(NUMCOLS*NUMROWS)
+        bne     @sl2
 .ENDIF
-        INY
-        BNE     LFDF29
-LFDF2A:
-        LDA     SCREEN+$200,Y
-        STA     SCREEN+$200-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$200+$C80,Y
-        STA     SCREEN+$200+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2A
-LFDF2B:
-        LDA     SCREEN+$300,Y
-        STA     SCREEN+$300-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$300+$C80,Y
-        STA     SCREEN+$300+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2B
-LFDF2C:
-        LDA     SCREEN+$400,Y
-        STA     SCREEN+$400-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$400+$C80,Y
-        STA     SCREEN+$400+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2C
-LFDF2D:
-        LDA     SCREEN+$500,Y
-        STA     SCREEN+$500-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$500+$C80,Y
-        STA     SCREEN+$500+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2D
-LFDF2E:
-        LDA     SCREEN+$600,Y
-        STA     SCREEN+$600-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$600+$C80,Y
-        STA     SCREEN+$600+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2E
-LFDF2F:
-        LDA     SCREEN+$700,Y
-        STA     SCREEN+$700-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$700+$C80,Y
-        STA     SCREEN+$700+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2F
-LFDF2G:
-        LDA     SCREEN+$800,Y
-        STA     SCREEN+$800-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$800+$C80,Y
-        STA     SCREEN+$800+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2G
-LFDF2H:
-        LDA     SCREEN+$900,Y
-        STA     SCREEN+$900-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$900+$C80,Y
-        STA     SCREEN+$900+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2H
-LFDF2I:
-        LDA     SCREEN+$a00,Y
-        STA     SCREEN+$a00-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$a00+$C80,Y
-        STA     SCREEN+$a00+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2I
-LFDF2J:
-        LDA     SCREEN+$b00,Y
-        STA     SCREEN+$b00-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$b00+$C80,Y
-        STA     SCREEN+$b00+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BNE     LFDF2J
-LFDF2K:
-        LDA     SCREEN+$c00,Y
-        STA     SCREEN+$c00-NUMCOLS,Y
-.IF HASATTRIBUTES
-        LDA     SCREEN+$c00+$C80,Y
-        STA     SCREEN+$c00+$C80-NUMCOLS,Y
-.ENDIF
-        INY
-        BPL     LFDF2K
 
-        RTS
+.IF HASATTRIBUTES
+
+        ldy     #NUMCOLS
+.REPEAT >(NUMCOLS*NUMROWS), I
+.SCOPE
+@sl3:
+        lda     ATTRS+(256*I),y
+        sta     ATTRS+(256*I)-NUMCOLS,y
+        iny
+        bne     @sl3
+.ENDSCOPE
+.ENDREP
+.IF <(NUMCOLS*NUMROWS) > 0
+@sl4:
+        lda     ATTRS+(256*>(NUMCOLS*NUMROWS)),y
+        sta     ATTRS+(256*>(NUMCOLS*NUMROWS))-NUMCOLS,y
+        iny
+        cpy     #<(NUMCOLS*NUMROWS)
+        bne     @sl4
+.ENDIF
+
+.ENDIF
+
+        rts
 
 ;               Execute the extended VDU codes
 
