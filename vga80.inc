@@ -274,7 +274,7 @@ LFD69:  ldy     #$80            ;
         sta     ModeExtension
 .ENDIF
         lda     #$20            ; Get <SPC>
-LFD74:  jsr     CLEARMORE
+        jsr     CLEARMORE
 
 ;    Handle <RS> subroutine
 ;    ----------------------
@@ -386,7 +386,7 @@ cursor_l:
         sty     CursorCol
         rts
 cursor_l_wrap:
-        ldy     #79
+        ldy     #NUMCOLS-1
         sty     CursorCol
 
 cursor_u:
@@ -941,9 +941,9 @@ exevdu26:       ; reset text window
                 lda     #0
                 sta     leftX
                 sta     topY
-                lda     #79
+                lda     #NUMCOLS-1
                 sta     rightX
-                lda     #39
+                lda     #NUMROWS-1
                 sta     bottomY
                 rts
 
