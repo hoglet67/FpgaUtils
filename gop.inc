@@ -1,5 +1,5 @@
 ; GOP related addresses
-GOP           = $A7F0
+GOP           = $AFF0
 
 HASGODIL      = 0
 
