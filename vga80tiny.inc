@@ -1,15 +1,17 @@
 vga80:
         LDA    #<wrch80
-        STA     wrcvec
+        STA     WRCVEC
         LDA    #>wrch80
-        STA     wrcvec+1
+        STA     WRCVEC+1
         LDA    #<rdch80
-        STA     rdcvec
+        STA     RDCVEC
         LDA    #>rdch80
-        STA     rdcvec+1
+        STA     RDCVEC+1
 
+.IF HASGODIL
         LDA     #$80
         STA     ModeExtension
+.ENDIF
         LDA     #$B2
         STA     VgaCtrl
 vga80l1:
@@ -92,10 +94,12 @@ LFD29:  cmp     #$20            ; Is the character a control code ?
 ;        bmi     LFD33          ; )
 ;        eor     #$60           ; ) Convert to screen character
 
+.IF !HASASCII
          cmp     #$40
          bcc     LFD33
          sbc     #$20
          and     #$5f
+.ENDIF
 
 LFD33:  sta     ($DE),y         ; Store character at current print position
 LFD38:  iny                     ; Increment cursor position
@@ -167,18 +171,23 @@ LFD69:  ldy     #$80            ;
         ldy     #$00            ; Clear screen memory index
         sty     $B000           ; Set 6847 VDG to alphanumeric mode
         lda     #$20            ; Get <SPC>
-LFD74:  sta     SCREEN,y        ; Clear byte of upper page of screen
-        sta     SCREEN+$100,y   ; Clear byte of lower page of screen
         jsr     CLEARMORE
-        iny                     ; Point to the next byte
-        bne     LFD74           ; ..and clear both complete pages
 
 ;    Handle <RS> subroutine
 ;    ----------------------
 ;
 ;  - Sets cursor to top left position.
 
-LFD7D:  jmp     $fd7d
+LFD7D:
+.IF SCREEN = $8000
+        jmp $fd7d
+.ELSE
+        lda #>SCREEN
+        ldy #<SCREEN
+        sta $df
+        sty $de
+        jmp     LFD42           ; Update cursor position and invert cursor
+.ENDIF
 
 ;    Handle <VT> subroutine
 ;    ----------------------
@@ -227,12 +236,13 @@ address_loop:
         inc     CursorRow
         lda     $de
         sec
-        sbc     #80
+        sbc     #NUMCOLS
         sta     $de
         lda     $df
         sbc     #0
         sta     $df
-        bmi     address_loop
+        cmp     #>SCREEN
+        bcs     address_loop
         pla                     ; restore de/df
         sta     $df
         pla
@@ -273,14 +283,14 @@ cursor_l:
         sty     CursorCol
         rts
 cursor_l_wrap:
-        ldy     #79
+        ldy     #NUMCOLS-1
         sty     CursorCol
 
 cursor_u:
         ldy     CursorRow
         dey
         bpl     cursor_u_nowrap
-        ldy     #39
+        ldy     #NUMROWS-1
 cursor_u_nowrap:
         sty     CursorRow
         rts
@@ -288,7 +298,7 @@ cursor_u_nowrap:
 cursor_r:
         ldy     CursorCol
         iny
-        cpy     #80
+        cpy     #NUMCOLS
         bcs     cursor_r_wrap
         sty     CursorCol
         rts
@@ -299,7 +309,7 @@ cursor_r_wrap:
 cursor_d:
         ldy     CursorRow
         iny
-        cpy     #40
+        cpy     #NUMROWS
         bcc     cursor_d_nowrap
         ldy     #0
 cursor_d_nowrap:
@@ -313,7 +323,7 @@ copy:
         pha
         lda     CursorCol
         sta     $de
-        lda     #$80
+        lda     #>SCREEN
         sta     $df
         ldy     CursorRow
 copy_loop:
@@ -321,7 +331,7 @@ copy_loop:
         bmi     copy_grab
         clc
         lda     $de
-        adc     #80
+        adc     #NUMCOLS
         sta     $de
         bcc     copy_loop
         inc     $df
@@ -329,6 +339,7 @@ copy_loop:
 copy_grab:
         iny
         lda     ($de), Y
+.IF !HASASCII
         ;                 ADC#$20
         ; Screen 00-1F -> 20-3F -> ASCII 40-5F
         ; Screen 20-3F -> 40-5F -> ASCII 20-3F
@@ -338,6 +349,7 @@ copy_grab:
         cmp     #$60
         bcs     copy_done
         eor     #$60
+.ENDIF
 copy_done:
         tax                    ; remember the ascii value
         jsr     cursor_r       ; copy also moves the cursor right
@@ -385,15 +397,7 @@ LFE08:  ldy     #NUMCOLS        ; Shift screen up 32 characters = 1 line
 ;
 ;  - For every #20 in Y a top line of the screen is not scrolled.
 
-LFE0D:  lda     SCREEN,y        ; Get byte from upper text page
-        sta     SCREEN-NUMCOLS,y                ; ..and store it a line higher
-        iny                     ; Point to next screen byte
-        bne     LFE0D           ; ..and shift up all the upper text page
-LFE19:  lda     SCREEN+$100,y           ; Get byte from lower text page
-        sta     SCREEN+$100-NUMCOLS,y           ; ..and store it a line higher
-        iny                     ; Point to next screen byte
-        bne     LFE19           ; ..and shift up all the lower text page
-        JSR     SCROLLMORE
+LFE0D:  jsr     SCROLLMORE
 
 ;    Delete Current Line subroutine
 ;    ------------------------------
@@ -624,78 +628,42 @@ tablehi:
 
 
 CLEARMORE:
-        sta     SCREEN+$200,Y
-        sta     SCREEN+$300,Y
-        sta     SCREEN+$400,Y
-        sta     SCREEN+$500,Y
-        sta     SCREEN+$600,Y
-        sta     SCREEN+$700,Y
-        sta     SCREEN+$800,Y
-        sta     SCREEN+$900,Y
-        sta     SCREEN+$a00,Y
-        sta     SCREEN+$b00,Y
-        sta     SCREEN+$c00,Y
-        rts
 
+cl1:
+.REPEAT >(NUMCOLS*NUMROWS), I
+        sta     SCREEN+(I*256),y
+.ENDREP
+        iny
+        bne     cl1
+.IF <(NUMCOLS*NUMROWS) > 0
+cl2:
+        sta     SCREEN+256*>(NUMCOLS*NUMROWS),y
+        iny
+        cpy     #<(NUMCOLS*NUMROWS)
+        bne     cl2
+.ENDIF
+        lda     #$20
+        rts
 
 SCROLLMORE:
 
-LFDF2A:
-        LDA     SCREEN+$200,Y
-        STA     SCREEN+$200-NUMCOLS,Y
-        INY
-        BNE     LFDF2A
-LFDF2B:
-        LDA     SCREEN+$300,Y
-        STA     SCREEN+$300-NUMCOLS,Y
-        INY
-        BNE     LFDF2B
-LFDF2C:
-        LDA     SCREEN+$400,Y
-        STA     SCREEN+$400-NUMCOLS,Y
-        INY
-        BNE     LFDF2C
-LFDF2D:
-        LDA     SCREEN+$500,Y
-        STA     SCREEN+$500-NUMCOLS,Y
-        INY
-        BNE     LFDF2D
-LFDF2E:
-        LDA     SCREEN+$600,Y
-        STA     SCREEN+$600-NUMCOLS,Y
-        INY
-        BNE     LFDF2E
-LFDF2F:
-        LDA     SCREEN+$700,Y
-        STA     SCREEN+$700-NUMCOLS,Y
-        INY
-        BNE     LFDF2F
-LFDF2G:
-        LDA     SCREEN+$800,Y
-        STA     SCREEN+$800-NUMCOLS,Y
-        INY
-        BNE     LFDF2G
-LFDF2H:
-        LDA     SCREEN+$900,Y
-        STA     SCREEN+$900-NUMCOLS,Y
-        INY
-        BNE     LFDF2H
-LFDF2I:
-        LDA     SCREEN+$a00,Y
-        STA     SCREEN+$a00-NUMCOLS,Y
-        INY
-        BNE     LFDF2I
-LFDF2J:
-        LDA     SCREEN+$b00,Y
-        STA     SCREEN+$b00-NUMCOLS,Y
-        INY
-        BNE     LFDF2J
-LFDF2K:
-        LDA     SCREEN+$c00,Y
-        STA     SCREEN+$c00-NUMCOLS,Y
-        INY
-        BNE     LFDF2K
-
+.REPEAT >(NUMCOLS*NUMROWS), I
+.SCOPE
+@sl1:
+        lda     SCREEN+(256*I),y
+        sta     SCREEN+(256*I)-NUMCOLS,y
+        iny
+        bne     @sl1
+.ENDSCOPE
+.ENDREP
+.IF <(NUMCOLS*NUMROWS) > 0
+@sl2:
+        lda     SCREEN+(256*>(NUMCOLS*NUMROWS)),y
+        sta     SCREEN+(256*>(NUMCOLS*NUMROWS))-NUMCOLS,y
+        iny
+        cpy     #<(NUMCOLS*NUMROWS)
+        bne     @sl2
+.ENDIF
         RTS
 
 vga32:
@@ -705,6 +673,8 @@ vga32l1:        LDA     $FF9E,Y
                 DEY
                 BPL     vga32l1
                 LDA     #$00
+.IF HASGODIL
                 STA     ModeExtension
+.ENDIF
                 STA     VgaCtrl
                 JMP     vga80l1
