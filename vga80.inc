@@ -750,7 +750,7 @@ tablehi:
 
 
 CLEARMORE:
-
+        ldy     #0
 cl1:
 .REPEAT >(NUMCOLS*NUMROWS), I
         sta     SCREEN+(I*256),y
@@ -767,6 +767,7 @@ cl2:
 
 .IF HASATTRIBUTES
         lda     attrib          ; set attribute
+        ldy     #0
 cl3:
 .REPEAT >(NUMCOLS*NUMROWS), I
         sta     ATTRS+(256*I),y
@@ -832,10 +833,11 @@ SCROLLMORE:
 ;               Execute the extended VDU codes
 
 ; set cursor position to x (queue+2) , y (queue+1)
-exevdu31:       ldy     #0              ; cursor off at old position
-                lda     ($de),y
-                and     #$7f
-                sta     ($de),y
+exevdu31:       ldy     $e0             ; cursor off at old position
+                jsr     LFD44           ; invert char at current cursor position
+;;                lda     ($de),y
+;;                and     #$7f
+;;                sta     ($de),y
                 lda     #>SCREEN        ; cursor position to y
                 sta     $df
                 lda     #<SCREEN
@@ -851,18 +853,51 @@ vdu31l1:        clc
                 sta     $df
                 dey
                 bne     vdu31l1
-vdu31l2:        lda     queue+2         ; cursor position to x
-                sta     $e0
-                ; jsr     lfd44         ; invert char at current cursor position
+vdu31l2:        ldy     queue+2         ; cursor position to x
+                sty     $e0
+                jsr     LFD44           ; invert char at current cursor position
                 rts
 
 exevdu17:       ; set foreground colour, actual setting of attribute should be handled by print routine
 .IF HASATTRIBUTES
                 lda     queue+1         ; load the colour
-                sta     attrib          ; store in memory
-.ENDIF
-                rts                     ; end
+                pha
+                and     #$07
+                tax
+                pla
+                bmi     vdu17_bg
+                lda     attrib
+                and     #$f0
+                ora     fg_cols, X
+                sta     attrib
+                rts
+vdu17_bg:       lda     attrib
+                and     #$0f
+                ora     bg_cols, X
+                sta     attrib
+                rts
 
+fg_cols:        .byte $00
+                .byte $04
+                .byte $02
+                .byte $06
+                .byte $01
+                .byte $05
+                .byte $03
+                .byte $07
+
+bg_cols:        .byte $00
+                .byte $40
+                .byte $20
+                .byte $60
+                .byte $10
+                .byte $50
+                .byte $30
+                .byte $70
+
+.ELSE
+                rts                     ; end
+.ENDIF
 
 exevdu16:       ; clear text window
                 lda     $de             ; save workspace addresses
