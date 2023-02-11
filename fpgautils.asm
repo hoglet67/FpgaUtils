@@ -7,6 +7,7 @@
         NUMROWS       = 40
         HASATTRIBUTES = 1
         HASASCII      = 0
+        HASFEFB       = 1
 
         .include "godil.inc"
 

@@ -7,6 +7,7 @@
         NUMROWS       = 25
         HASATTRIBUTES = 0
         HASASCII      = 1
+        HASFEFB       = 0
 
         .include "gop.inc"
         .include "constants.inc"
