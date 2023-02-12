@@ -85,7 +85,7 @@ notque:         cmp     #22             ; is it vdu 22
                 jmp     exevdu26
 t16:            cmp     #16
                 bne     t06
-                jmp     exevdu16
+                jmp     clear_text_area
 
 t06:    cmp     #$06            ; Is it <ACK> ?
         beq     LFD0B           ; ..yes, reset the 6847 VDG to alphanumeric
@@ -164,18 +164,14 @@ LFD1A:  jmp     $fd1a
 ;           Y register contains current cursor position ?#E0.
 ;  - Accumulator preserved.
 
-LFD29:  cmp     #$20            ; Is the character a control code ?
+LFD29:  cmp     #Space          ; Is the character a control code ?
         bcc     LFD44           ; ..yes, so don't print it
 
-;        adc     #$1F           ; )
-;        bmi     LFD33          ; )
-;        eor     #$60           ; ) Convert to screen character
-
 .IF !HASASCII
-         cmp     #$40
-         bcc     LFD33
-         sbc     #$20
-         and     #$5f
+        cmp     #$40
+        bcc     LFD33
+        sbc     #$20
+        and     #$5f
 .ENDIF
 
 LFD33:  sta     ($DE),y         ; Store character at current print position
@@ -186,11 +182,11 @@ LFD33:  sta     ($DE),y         ; Store character at current print position
         clc
         lda     $de             ; add 3200 to character positions
         pha
-        adc     #<3200
+        adc     #<(NUMROWS*NUMCOLS)
         sta     $de
         lda     $df
         pha
-        adc     #>3200
+        adc     #>(NUMROWS*NUMCOLS)
         sta     $df
         lda     attrib
         sta     ($de),y
@@ -201,8 +197,8 @@ LFD33:  sta     ($DE),y         ; Store character at current print position
         pla
 .ENDIF
 
-LFD38:  iny                     ; Increment cursor position
-        cpy     #NUMCOLS        ; Reached end of the current print line ?
+LFD38:  cpy     rightX          ; Reached end of the current print line ?
+        iny                     ; Increment cursor position
         bcc     LFD42           ; ..no, update cursor position and invert
                                 ; the cursor at this position
         jsr     LFDEC           ; ..yes, do <CR><LF> first
@@ -210,7 +206,7 @@ LFD38:  iny                     ; Increment cursor position
 ;    Reset Cursor to Start of Current Line Without Deletion subroutine
 ;    -----------------------------------------------------------------
 
-LFD40:  ldy     #$00            ; Point to start of current line
+LFD40:  ldy     leftX           ; Point to start of current line
 LFD42:  sty     $E0             ; Update current cursor position register
 
 ;    Invert Character at Current Cursor Position subroutine
@@ -233,7 +229,7 @@ LFD44:
 
 LFD50:  jsr     LFE35           ; Move cursor back one position if possible, otherwise
                                 ; invert character at current cursor position and return
-        lda     #$20            ; Get <SPC>
+        lda     #Space          ; Get <SPC>
         sta     ($DE),y         ; Blank character at previous cursor pos'n
         bpl     LFD42           ; Update cursor position and invert cursor
 
@@ -251,7 +247,7 @@ LFD5C:  jsr     LFE35           ; Move cursor back one position if possible, oth
 
 LFD62:  jsr     LFDEC           ; Do <LF>, scrolling if necessary
 
-        lda     VgaCtrl        ; disable the cursor
+        lda     VgaCtrl         ; disable the cursor
         and     #$bf
         sta     VgaCtrl
 
@@ -273,8 +269,7 @@ LFD69:  ldy     #$80            ;
         lda     #$80            ; set Godil to VGA80
         sta     ModeExtension
 .ENDIF
-        lda     #$20            ; Get <SPC>
-        jsr     CLEARMORE
+        jsr     clear_text_area
 
 ;    Handle <RS> subroutine
 ;    ----------------------
@@ -282,15 +277,11 @@ LFD69:  ldy     #$80            ;
 ;  - Sets cursor to top left position.
 
 LFD7D:
-.IF SCREEN = $8000
-        jmp $fd7d
-.ELSE
-        lda #>SCREEN
-        ldy #<SCREEN
-        sta $df
-        sty $de
+        ldx     #$de
+        ldy     topY
+        jsr     calc_line_addr
+        ldy     leftX
         jmp     LFD42           ; Update cursor position and invert cursor
-.ENDIF
 
 ;    Handle <VT> subroutine
 ;    ----------------------
@@ -381,40 +372,50 @@ cursor_enabled:
 
 cursor_l:
         ldy     CursorCol
+        cpy     leftX
+        bcc     cursor_l_wrap
+        beq     cursor_l_wrap
         dey
-        bmi     cursor_l_wrap
         sty     CursorCol
         rts
 cursor_l_wrap:
-        ldy     #NUMCOLS-1
+        ldy     rightX
         sty     CursorCol
+
+        ;; fall through to
 
 cursor_u:
         ldy     CursorRow
+        cpy     topY
+        bcc     cursor_u_wrap
+        beq     cursor_u_wrap
         dey
-        bpl     cursor_u_nowrap
-        ldy     #NUMROWS-1
-cursor_u_nowrap:
+        sty     CursorRow
+        rts
+cursor_u_wrap:
+        ldy     bottomY
         sty     CursorRow
         rts
 
 cursor_r:
         ldy     CursorCol
+        cpy     rightX
         iny
-        cpy     #NUMCOLS
         bcs     cursor_r_wrap
         sty     CursorCol
         rts
 cursor_r_wrap:
-        ldy     #0
+        ldy     leftX
         sty     CursorCol
+
+        ;; fall through to
 
 cursor_d:
         ldy     CursorRow
+        cpy     bottomY
         iny
-        cpy     #NUMROWS
         bcc     cursor_d_nowrap
-        ldy     #0
+        ldy     topY
 cursor_d_nowrap:
         sty     CursorRow
         rts
@@ -424,23 +425,10 @@ copy:
         pha
         lda     $df
         pha
-        lda     CursorCol
-        sta     $de
-        lda     #>SCREEN
-        sta     $df
+        ldx     #$de
         ldy     CursorRow
-copy_loop:
-        dey
-        bmi     copy_grab
-        clc
-        lda     $de
-        adc     #NUMCOLS
-        sta     $de
-        bcc     copy_loop
-        inc     $df
-        bne     copy_loop
-copy_grab:
-        iny
+        jsr     calc_line_addr
+        ldy     CursorCol
         lda     ($de), Y
 .IF !HASASCII
         ;                 ADC#$20
@@ -469,11 +457,11 @@ copy_done:
 ;  - If in page mode, decrements page counter, and at the end of the page
 ;    waits for a keypress before scrolling.
 
-LFDEC:  lda     $DE             ; Get LSB start of line
-        ldy     $DF             ; Get MSB start of line
-        cpy     #>SCREENEND     ; In lower screen page ?
+LFDEC:  lda     $de             ; Get LSB start of line
+        ldy     $df             ; Get MSB start of line
+        cpy     windowEnd+1     ; In lower screen page ?
         bcc     LFE2C           ; ..no, do <LF> - scrolling not required
-        cmp     #<SCREENEND     ; In last page..but is it the last line ?
+        cmp     windowEnd       ; In last page..but is it the last line ?
         bcc     LFE2C           ; ..no, do <LF> - scrolling not required
 
         ; SCROLLING REQUIRED - CHECK IN PAGE MODE
@@ -493,34 +481,42 @@ LFE06:  sty     $E6             ; Reset page counter to 16 lines
 ;    Scroll the Screen subroutine
 ;    ----------------------------
 
-LFE08:  ldy     #NUMCOLS        ; Shift screen up 32 characters = 1 line
+LFE08:  jsr     scroll_text_area
 
-;    Scroll Y lines of the Screen subroutine
-;    ---------------------------------------
-;
-;  - For every #20 in Y a top line of the screen is not scrolled.
+;;    Delete Current Line subroutine
+;;    ------------------------------
+;;
+;;  - Clears the 32 character line based at (#DE) to black (<SPACE>).
 
-LFE0D:  jsr     SCROLLMORE
-
-;    Delete Current Line subroutine
-;    ------------------------------
-;
-;  - CLears the 32 character line based at (#DE) to black (<SPACE>).
-
-        ldy     #NUMCOLS-1      ; Set character pointer to end of line
-        lda     #$20            ; Get <SPACE>
-LFE26:  sta     ($DE),y         ; Clear the character to black
-        dey                     ; Point to the next character
-        bpl     LFE26           ; ..and clear the entire print line
+        ldy     leftX           ; Set character pointer to end of line
+        lda     #Space          ; Get <SPACE>
+LFE26:  sta     ($de),y         ; Clear the character to black
+        cpy     rightX
+        iny                     ; Point to the next character
+        bcc     LFE26           ; ..and clear the entire print line
 
 .IF HASATTRIBUTES
-        ldy     #NUMCOLS-1      ; Set character pointer to end of line
+        clc
+        lda     $de
+        pha
+        adc     #<(NUMROWS*NUMCOLS)
+        sta     $de
+        lda     $df
+        pha
+        adc     #>(NUMROWS*NUMCOLS)
+        sta     $df
+        ldy     leftX           ; Set character pointer to end of line
         lda     attrib          ; Get attribute
-LFE26a: sta     $98B0,y         ; Set the current attribute
-        dey                     ; Point to the next character
-        bpl     LFE26a          ; ..and clear the entire print line
+LFE26a: sta     ($de),y         ; Set the current attribute
+        cpy     rightX
+        iny                     ; Point to the next character
+        bcc     LFE26a          ; ..and clear the entire print line
+        pla
+        sta     $df
+        pla
+        sta     $de
 .ENDIF
-        rts                     ;
+        rts
 
 ;    Add One Line to the Cursor Position subroutine
 ;    ----------------------------------------------
@@ -548,19 +544,22 @@ LFE34:  rts                     ;
 ;  - Used by the <BS> and <DEL> subroutines.
 ;  - Enter with Y register holding the current cursor position ?#31.
 
-LFE35:  dey                     ; Point to the previous cursor position
-        bpl     LFE51           ; ..still on current line, return
+LFE35:  cpy     leftX
+        bcc     underflow
+        beq     underflow
+        dey                     ; Point to the previous cursor position
+        rts
 
         ; DEAL WITH LINE UNDERFLOW
-
-        ldy     #NUMCOLS-1      ; Set cursor position to last char on line
-LFE3A:  lda     $DE             ; Get LSB current line address
-        bne     LFE49           ; ..not at top of screen, so can move line
-                                ; address up a line
-        ldx     $DF             ; Get MSB current line address
-        cpx     #>SCREEN        ; Is it upper page ?
-        bne     LFE49           ; ..no, move line address up a line
-
+underflow:
+        ldy     rightX          ; Set cursor position to last char on line
+LFE3A:
+        lda     windowStart     ; Get the LSB of the top line of text window
+        cmp     $de             ; Compare to the LSB current line address
+        lda     windowStart+1   ; Get the MSB of the top line of text window
+        sbc     $df             ; Compare to the  MSB current line address
+        bcc     LFE49           ; branch if nor on the first line
+underflow3:
         ; ALREADY AT TOP OF SCREEN - RETURN
 
         pla                     ; )
@@ -569,10 +568,11 @@ LFE3A:  lda     $DE             ; Get LSB current line address
 
         ; MOVE CURRENT START ADDRESS UP A LINE
 
-LFE49:  sbc     #NUMCOLS        ; Move LSB current line back 32 characters
-        sta     $DE             ; ..and update LSB line addres
+LFE49:  lda     $de             ; Move LSB current line back 32 characters
+        sbc     #NUMCOLS-1      ; C = 0 on entry
+        sta     $de             ; ..and update LSB line addres
         bcs     LFE51           ;
-        dec     $DF             ; Decrement MSB line address if overflow
+        dec     $df             ; Decrement MSB line address if overflow
 LFE51:  rts                     ;
 
 ;    Send Character to VIA and Screen subroutine
@@ -750,112 +750,21 @@ tablehi:
         .byte >LFDC6            ;
         .byte >LFDC2            ;
 
-
-CLEARMORE:
-        ldy     #0
-cl1:
-.REPEAT >(NUMCOLS*NUMROWS), I
-        sta     SCREEN+(I*256),y
-.ENDREP
-        iny
-        bne     cl1
-.IF <(NUMCOLS*NUMROWS) > 0
-cl2:
-        sta     SCREEN+256*>(NUMCOLS*NUMROWS),y
-        iny
-        cpy     #<(NUMCOLS*NUMROWS)
-        bne     cl2
-.ENDIF
-
-.IF HASATTRIBUTES
-        lda     attrib          ; set attribute
-        ldy     #0
-cl3:
-.REPEAT >(NUMCOLS*NUMROWS), I
-        sta     ATTRS+(256*I),y
-.ENDREP
-        iny
-        bne     cl3
-.IF <(NUMCOLS*NUMROWS) > 0
-cl4:
-        sta     ATTRS+(256*>(NUMCOLS*NUMROWS)),y
-        iny
-        cpy     #<(NUMCOLS*NUMROWS)
-        bne     cl4
-.ENDIF
-.ENDIF
-        lda     #$20
-        rts
-
-SCROLLMORE:
-
-.REPEAT >(NUMCOLS*NUMROWS), I
-.SCOPE
-@sl1:
-        lda     SCREEN+(256*I),y
-        sta     SCREEN+(256*I)-NUMCOLS,y
-        iny
-        bne     @sl1
-.ENDSCOPE
-.ENDREP
-.IF <(NUMCOLS*NUMROWS) > 0
-@sl2:
-        lda     SCREEN+(256*>(NUMCOLS*NUMROWS)),y
-        sta     SCREEN+(256*>(NUMCOLS*NUMROWS))-NUMCOLS,y
-        iny
-        cpy     #<(NUMCOLS*NUMROWS)
-        bne     @sl2
-.ENDIF
-
-.IF HASATTRIBUTES
-
-        ldy     #NUMCOLS
-.REPEAT >(NUMCOLS*NUMROWS), I
-.SCOPE
-@sl3:
-        lda     ATTRS+(256*I),y
-        sta     ATTRS+(256*I)-NUMCOLS,y
-        iny
-        bne     @sl3
-.ENDSCOPE
-.ENDREP
-.IF <(NUMCOLS*NUMROWS) > 0
-@sl4:
-        lda     ATTRS+(256*>(NUMCOLS*NUMROWS)),y
-        sta     ATTRS+(256*>(NUMCOLS*NUMROWS))-NUMCOLS,y
-        iny
-        cpy     #<(NUMCOLS*NUMROWS)
-        bne     @sl4
-.ENDIF
-
-.ENDIF
-
-        rts
-
 ;               Execute the extended VDU codes
 
 ; set cursor position to x (queue+2) , y (queue+1)
 exevdu31:       ldy     $e0             ; cursor off at old position
                 jsr     LFD44           ; invert char at current cursor position
-;;                lda     ($de),y
-;;                and     #$7f
-;;                sta     ($de),y
-                lda     #>SCREEN        ; cursor position to y
-                sta     $df
-                lda     #<SCREEN
-                sta     $de
-                ldy     queue+1
-                beq     vdu31l2         ; jump if y=0 (upper row)
-vdu31l1:        clc
-                lda     $de
-                adc     #NUMCOLS
-                sta     $de
-                lda     $df
-                adc     #0
-                sta     $df
-                dey
-                bne     vdu31l1
-vdu31l2:        ldy     queue+2         ; cursor position to x
+                ldx     #$de
+                lda     queue+1
+                clc
+                adc     topY
+                tay
+                jsr     calc_line_addr
+                lda     queue+2         ; cursor position to x
+                clc
+                adc     leftX
+                tay
                 sty     $e0
                 jsr     LFD44           ; invert char at current cursor position
                 rts
@@ -901,7 +810,28 @@ bg_cols:        .byte $00
                 rts                     ; end
 .ENDIF
 
-exevdu16:       ; clear text window
+
+;; Calculate the address of absolute line Y
+
+calc_line_addr:
+                lda     #<SCREEN        ; calculate start address of topY
+                sta     0, x
+                lda     #>SCREEN
+                sta     1, x
+                iny
+cla1:           dey
+                beq     cla2
+                clc
+                lda     0, x
+                adc     #NUMCOLS
+                sta     0, x
+                bcc     cla1
+                inc     1, x
+                bcs     cla1            ; branch alwats
+cla2:           rts
+
+
+scroll_text_area:
                 lda     $de             ; save workspace addresses
                 pha
                 lda     $df
@@ -910,59 +840,30 @@ exevdu16:       ; clear text window
                 pha
                 lda     $e1
                 pha
-                lda     #<SCREEN        ; calculate start address of topY
-                sta     queue
-                lda     #>SCREEN
-                sta     queue+1
-                ldy     topY            ; load counter
-vdu16l1:        clc
-                lda     queue
-                adc     #NUMCOLS
-                sta     queue
-                lda     queue+1
-                adc     #0
-                sta     queue+1
-                dey
-                bne     vdu16l1
-                ; now queue, queue+1 contains first address of line
-                ; just fill this area with spaces from left to right
-                ; for the correct number of lines
-                ldx     topY
-vdu16l2:        lda     queue
-                sta     $9e
+
+                ldy     topY            ; load address of top most row in window
+                ldx     #$de
+                jsr     calc_line_addr
+
 .IF HASATTRIBUTES
-                clc
-                adc     #<3200
-                sta     $a0
+                clc                     ; calculate corresponding attribue address
+                lda     $de
+                adc     #<(NUMROWS*NUMCOLS)
+                pha
+                lda     $df
+                adc     #>(NUMROWS*NUMCOLS)
+                pha
 .ENDIF
-                lda     queue+1
-                sta     $9f
+                jsr     scroll_worker   ; scroll the text area
+
 .IF HASATTRIBUTES
-                adc     #>3200
-                sta     $a1
+                pla
+                sta     $df
+                pla
+                sta     $de
+                jsr     scroll_worker   ; scroll the attribue area
 .ENDIF
-                ldy     leftX
-vdu16l3:        lda     #32             ; clear character
-                sta     ($9e),y
-.IF HASATTRIBUTES
-                lda     attrib          ; set background attrib
-                sta     ($a0),y
-.ENDIF
-                iny
-                cpy     rightX
-                bcc     vdu16l3         ; branch if smaller
-                beq     vdu16l3         ; branch if equal
-                clc
-                lda     queue           ; increment row
-                adc     #NUMCOLS
-                sta     queue
-                lda     queue+1
-                adc     #0
-                sta     queue+1
-                inx
-                cpx     bottomY
-                bcc     vdu16l2
-                beq     vdu16l2
+
                 pla
                 sta     $e1
                 pla
@@ -973,6 +874,124 @@ vdu16l3:        lda     #32             ; clear character
                 sta     $de
                 rts
 
+scroll_worker:
+
+                ; $de/$df contains the address of the first line of the text area
+
+                clc
+                lda     $de
+                adc     #NUMCOLS
+                sta     $e0
+                lda     $df
+                adc     #0
+                sta     $e1
+
+                ; $e0/$e1 contains the address of the second line of the text area
+
+                ldx     topY
+sta1:
+                inx
+                ldy     leftX
+                dey
+sta2:
+                iny
+                lda     ($e0),Y
+                sta     ($de),Y
+                cpy     rightX
+                bcc     sta2
+
+                clc
+                lda     $de
+                adc     #NUMCOLS
+                sta     $de
+                lda     $df
+                adc     #0
+                sta     $df
+
+                clc
+                lda     $e0
+                adc     #NUMCOLS
+                sta     $e0
+                lda     $e1
+                adc     #0
+                sta     $e1
+
+                cpx     bottomY
+                bcc     sta1
+                rts
+
+clear_text_area:
+                lda     $de             ; save workspace addresses
+                pha
+                lda     $df
+                pha
+.IF HASATTRIBUTES
+                lda     $e0
+                pha
+                lda     $e1
+                pha
+.ENDIF
+                ldx     #$de
+                ldy     topY            ; load counter
+                jsr     calc_line_addr
+
+                ; $de/$df contains the address of the first line of the text area
+                ; just fill this area with spaces from left to right
+                ; for the correct number of lines
+
+.IF HASATTRIBUTES
+                clc
+                lda     $de
+                adc     #<(NUMROWS*NUMCOLS)
+                sta     $e0
+                lda     $df
+                adc     #>(NUMROWS*NUMCOLS)
+                sta     $e1
+.ENDIF
+
+                ldx     topY
+cta1:           ldy     leftX
+cta2:           lda     #Space          ; clear character
+                sta     ($de),y
+.IF HASATTRIBUTES
+                lda     attrib          ; set background attrib
+                sta     ($e0),y
+.ENDIF
+                iny
+                cpy     rightX
+                bcc     cta2            ; branch if smaller
+                beq     cta2            ; branch if equal
+                clc
+                lda     $de             ; increment row
+                adc     #NUMCOLS
+                sta     $de
+                lda     $df
+                adc     #0
+                sta     $df
+.IF HASATTRIBUTES
+                clc
+                lda     $e0             ; increment row
+                adc     #NUMCOLS
+                sta     $e0
+                lda     $e1
+                adc     #0
+                sta     $e1
+.ENDIF
+                inx
+                cpx     bottomY
+                bcc     cta1
+                beq     cta1
+.IF HASATTRIBUTES
+                pla
+                sta     $e1
+                pla
+                sta     $e0
+.ENDIF
+                pla
+                sta     $df
+                pla
+                sta     $de
+                rts
 
 exevdu26:       ; reset text window
                 lda     #0
@@ -982,7 +1001,7 @@ exevdu26:       ; reset text window
                 sta     rightX
                 lda     #NUMROWS-1
                 sta     bottomY
-                rts
+                jmp     calc_window_limits
 
 exevdu28:       ; set textwindow (VDU 28,leftX,bottomY,rightX,topY)
                 ldx     #4
@@ -990,6 +1009,29 @@ vdu28l1:        lda     queue,x
                 sta     topY-1,x
                 dex
                 bne     vdu28l1
+
+calc_window_limits:
+                lda     $de
+                pha
+                lda     $df
+                pha
+                ldx     #$de
+                ldy     topY
+                jsr     calc_line_addr
+                lda     $de
+                sta     windowStart
+                lda     $df
+                sta     windowStart+1
+                ldy     bottomY
+                jsr     calc_line_addr
+                lda     $de
+                sta     windowEnd
+                lda     $df
+                sta     windowEnd+1
+                pla
+                sta     $df
+                pla
+                sta     $de
                 rts
 
 exevdu22:       ldy     #0              ; reset y register
