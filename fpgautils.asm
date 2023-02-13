@@ -8,6 +8,7 @@
         HASATTRIBUTES = 1
         HASASCII      = 0
         HASFEFB       = 1
+        HASVDU19      = 1
 
         .include "godil.inc"
 

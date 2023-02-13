@@ -18,6 +18,7 @@ bottomY       = vduque+18
 leftX         = vduque+19
 windowStart   = vduque+20
 windowEnd     = vduque+22
+inverse       = vduque+24
 
 ; MOS Entry addresses
 WRCVEC = $0208

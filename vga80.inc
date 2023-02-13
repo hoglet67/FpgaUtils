@@ -15,11 +15,14 @@ vga80:
         LDA     #$80
         STA     ModeExtension
 .ENDIF
+.IF HASATTRIBUTES
         LDA     #$BA
         STA     VgaCtrl
-.IF HASATTRIBUTES
         LDA     #DefaultAttrib
         STA     attrib
+.ELSE
+        LDA     #$B2
+        STA     VgaCtrl
 .ENDIF
         JSR     exevdu26
 vga80l1:
@@ -64,7 +67,11 @@ exe4:           cmp     #25             ; is it 25,m,x,y (plot command)
 exe5:           cmp     #18             ; is it 18,m,c (set graphics colour)
                 bne     exe6
                 jmp     exevdu18
-exe6:           lda     #0              ; no code? strange
+exe6:           cmp     #19
+                bne     exe7
+                jmp     exevdu19
+exe7:
+                lda     #0              ; no code? strange
                 sta     ctrlcode        ; clear queue
                 rts                     ; end routine
 
@@ -72,6 +79,8 @@ notque:         cmp     #22             ; is it vdu 22
                 beq     q17             ; why not? It's also 1 byte queue length :-)
                 cmp     #25             ; is it vdu 25
                 beq     q25
+                cmp     #19             ; is it vdu 19
+                beq     q25             ; also five parameter bytes
                 cmp     #31             ; is it vdu 31
                 beq     q31
                 cmp     #17             ; is it vdu 17
@@ -174,7 +183,8 @@ LFD29:  cmp     #Space          ; Is the character a control code ?
         and     #$5f
 .ENDIF
 
-LFD33:  sta     ($DE),y         ; Store character at current print position
+LFD33:  ora     inverse
+        sta     ($DE),y         ; Store character at current print position
 
 .IF HASATTRIBUTES
         ; set character attribute
@@ -265,6 +275,7 @@ LFD69:  ldy     #$80            ;
         sty     $E1             ; Set the cursor mask to default
         ldy     #$00            ; Clear screen memory index
         sty     $B000           ; Set 6847 VDG to alphanumeric mode
+        sty     inverse         ; clear the inverse video flag
 .IF HASGODIL
         lda     #$80            ; set Godil to VGA80
         sta     ModeExtension
@@ -769,6 +780,26 @@ exevdu31:       ldy     $e0             ; cursor off at old position
                 jsr     LFD44           ; invert char at current cursor position
                 rts
 
+exevdu19:
+.IF HASVDU19
+                lda     queue+4         ; physical colour (0-7)
+                and     #$07
+                tax
+                lda     queue+5         ; logical colour (0-7)
+                beq     vdu19_bg
+                lda     VgaCtrl
+                and     #$f8
+                ora     fg_cols, x
+                sta     VgaCtrl
+                rts
+vdu19_bg:
+                lda     VgaCtrl2
+                and     #$f8
+                ora     fg_cols, x
+                sta     VgaCtrl2
+.ENDIF
+                rts
+
 exevdu17:       ; set foreground colour, actual setting of attribute should be handled by print routine
 .IF HASATTRIBUTES
                 lda     queue+1         ; load the colour
@@ -787,6 +818,16 @@ vdu17_bg:       lda     attrib
                 ora     bg_cols, X
                 sta     attrib
                 rts
+.ELSE
+                lda     queue+1         ; load the colour
+                bpl     vdu17_done      ; ignore the fg colour
+                cmp     #$81            ; C=0 bg colour 0    = normal video
+                lda     #$00            ; C=1 bg colour 1... = inverse video
+                ror     a
+                sta     inverse
+vdu17_done:
+                rts                     ; end
+.ENDIF
 
 fg_cols:        .byte $00
                 .byte $04
@@ -805,10 +846,6 @@ bg_cols:        .byte $00
                 .byte $50
                 .byte $30
                 .byte $70
-
-.ELSE
-                rts                     ; end
-.ENDIF
 
 
 ;; Calculate the address of absolute line Y

@@ -5,9 +5,10 @@
         SCREEN        = $8000
         NUMCOLS       = 80
         NUMROWS       = 40
-        HASATTRIBUTES = 1
+        HASATTRIBUTES = 0
         HASASCII      = 0
         HASFEFB       = 0
+        HASVDU19      = 1
 
         .include "godil.inc"
         .include "constants.inc"

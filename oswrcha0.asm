@@ -8,6 +8,7 @@
         HASATTRIBUTES = 0
         HASASCII      = 1
         HASFEFB       = 0
+        HASVDU19      = 0
 
         .include "gop.inc"
         .include "constants.inc"
