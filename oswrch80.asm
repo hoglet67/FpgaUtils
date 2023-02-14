@@ -26,5 +26,11 @@ AtmHeader:
         .SEGMENT "CODE"
 
 StartAddr:
+        ; this is a bug fix for the BRAN shadow Latch having a random
+        ; value on power up. In my case it was 0xBE, which made it think
+        ; ROM 14 was in play, causing memory beyond the BRAN workspace
+        ; to be corrupted. This memory is used by the OSWRCH driver.
+        lda    #0
+        sta    $fd
         .include "vga80.inc"
 EndAddr:
